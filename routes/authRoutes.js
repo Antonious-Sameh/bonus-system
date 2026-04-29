@@ -69,4 +69,31 @@ router.post("/login", async (req, res) => {
   }
 });
 
+
+
+
+
+// 3. تعديل بيانات الزبون (الاسم، الموبايل، النقاط، والكود)
+router.put("/update-customer/:id", async (req, res) => {
+  try {
+    const { name, phone, points, customerCode } = req.body;
+
+    // بنحدث البيانات بناءً على الـ ID اللي جاي في الـ URL
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { name, phone, points, customerCode },
+      { new: true } // عشان يرجعلك البيانات الجديدة بعد التعديل
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "الزبون ده مش موجود يا ريس" });
+    }
+
+    res.json({ message: "تم تحديث البيانات بنجاح", user: updatedUser });
+  } catch (error) {
+    console.error("خطأ في التعديل:", error);
+    res.status(500).json({ message: "حصلت مشكلة وأحنا بنحدث البيانات" });
+  }
+});
+
 module.exports = router;
