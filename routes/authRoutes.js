@@ -5,14 +5,15 @@ const User = require("../models/User");
 // 1. تسجيل عميل جديد (ده الأدمن بس اللي هيستخدمه)
 router.post("/register", async (req, res) => {
   try {
-    const { name, phone, password, role } = req.body;
+    // التعديل هنا: ضفنا customerCode عشان نستلمه من الفرونت إيند
+    const { name, phone, password, role, customerCode } = req.body;
 
-    // نأكد إن الموبايل مش متسجل قبل كدة
     const userExists = await User.findOne({ phone });
     if (userExists)
       return res.status(400).json({ message: "الرقم ده متسجل قبل كدة يا ريس" });
 
-    const newUser = new User({ name, phone, password, role });
+    // التعديل هنا: ضفنا customerCode داخل الـ newUser عشان يتسيف في الداتابيز
+    const newUser = new User({ name, phone, password, role, customerCode });
     await newUser.save();
 
     res.status(201).json({ message: "تم تسجيل العميل بنجاح" });
