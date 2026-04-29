@@ -34,14 +34,15 @@ router.post('/add-points', async (req, res) => {
 });
 
 // 2. عرض كل الزبائن بالترتيب (Leaderboard) + إحصائيات سريعة
+// 2. عرض كل الزبائن بالترتيب (Leaderboard) + إحصائيات سريعة
 router.get('/leaderboard', async (req, res) => {
     try {
-        // جلب الزبائن
+        // جلب الزبائن - تم إضافة _id و code لضمان ظهور البيانات كاملة
         const users = await User.find({ role: 'customer' })
                                 .sort({ points: -1 })
-                                .select('name phone points');
+                                .select('name phone points code _id'); // تأكدنا إن الـ ID والكود هيرجعوا
 
-        // حساب مبيعات اليوم (من بداية اليوم الحالي)
+        // حساب مبيعات اليوم
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
 
@@ -51,7 +52,6 @@ router.get('/leaderboard', async (req, res) => {
 
         const todaySales = todayTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-        // بنبعت الداتا والـ stats في ريسفونس واحد
         res.json({
             customers: users,
             stats: {
