@@ -137,4 +137,78 @@ router.get('/sales-report', async (req, res) => {
 
 
 
+
+
+
+// 5. تعديل بيانات زبون (نقاط، اسم، موبايل)
+router.put('/update-customer/:id', async (req, res) => {
+    try {
+        const { name, phone, points } = req.body;
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.id,
+            { name, phone, points },
+            { new: true } // عشان يرجعلك البيانات الجديدة بعد التعديل
+        );
+
+        if (!updatedUser) return res.status(404).json({ message: 'الزبون مش موجود' });
+
+        res.json({ message: 'تم تحديث البيانات بنجاح', user: updatedUser });
+    } catch (error) {
+        res.status(500).json({ message: 'فشل في تعديل بيانات الزبون' });
+    }
+});
+
+
+
+
+
+// 6. تغيير كلمة سر زبون
+router.put('/change-password/:id', async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        // لو بتستخدم bcrypt لتشفير الباسورد لازم تشفره هنا الأول
+        const bcrypt = require('bcryptjs');
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
+        
+        res.json({ message: 'تم تغيير كلمة السر بنجاح' });
+    } catch (error) {
+        res.status(500).json({ message: 'فشل في تغيير كلمة السر' });
+    }
+});
+
+
+
+
+
+
+
+
+
+// 7. حذف زبون نهائياً مع تاريخ عملياته
+router.delete('/delete-customer/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+
+        // 1. حذف الزبون
+        const user = await User.findByIdAndDelete(userId);
+        if (!user) return res.status(404).json({ message: 'الزبون مش موجود أصلاً' });
+
+        // 2. حذف كل العمليات المرتبطة بيه عشان ننظف الداتابيز
+        await Transaction.deleteMany({ customerId: userId });
+
+        res.json({ message: `تم حذف ${user.name} وكل بياناته بنجاح` });
+    } catch (error) {
+        res.status(500).json({ message: 'فشل في حذف الزبون' });
+    }
+});
+
+
+
+
+
+
+
 module.exports = router;
