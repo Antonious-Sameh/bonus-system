@@ -155,19 +155,28 @@ router.put("/update-customer/:id", async (req, res) => {
   }
 });
 
-// 6. تغيير كلمة سر زبون
+// 6. تغيير كلمة سر زبون (من الأدمن)
 router.put("/change-password/:id", async (req, res) => {
   try {
     const { newPassword } = req.body;
-    // لو بتستخدم bcrypt لتشفير الباسورد لازم تشفره هنا الأول
-    const bcrypt = require("bcryptjs");
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
+    if (!newPassword || newPassword.trim().length < 4) {
+      return res.status(400).json({ message: "كلمة السر لازم تكون 4 حروف على الأقل" });
+    }
 
-    res.json({ message: "تم تغيير كلمة السر بنجاح" });
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { password: newPassword.trim() },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "الزبون مش موجود" });
+    }
+
+    res.json({ message: `تم تغيير كلمة سر ${user.name} بنجاح` });
   } catch (error) {
+    console.error("خطأ في تغيير الباسورد:", error);
     res.status(500).json({ message: "فشل في تغيير كلمة السر" });
   }
 });

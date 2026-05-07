@@ -7,7 +7,9 @@ const app = express();
 
 // 1. استدعاء ملفات الـ Routes
 const authRoutes = require('./routes/authRoutes');
-const adminRoutes = require('./routes/adminRoutes'); // ضفنا ده
+const adminRoutes = require('./routes/adminRoutes');
+const productRoutes = require('./routes/productRoutes'); // المنتجات
+const offerRoutes = require('./routes/offerRoutes');     // العروض
 
 // 2. الـ Middleware
 app.use(express.json()); 
@@ -15,7 +17,9 @@ app.use(cors());
 
 // 3. استخدام الـ Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes); // وضفنا ده كمان
+app.use('/api/admin', adminRoutes);
+app.use('/api/products', productRoutes); // المنتجات
+app.use('/api/offers', offerRoutes);     // العروض
 
 // 4. توصيل قاعدة البيانات (MongoDB)
 mongoose.connect(process.env.MONGO_URI)
