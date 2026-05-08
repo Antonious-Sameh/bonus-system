@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
+const { sendNotificationToUser } = require("./pushRoutes");
 
 // 1. إضافة نقاط لعميل (العملية الأساسية) مع إضافة "ملاحظة"
 router.post("/add-points", async (req, res) => {
@@ -26,6 +27,15 @@ router.post("/add-points", async (req, res) => {
       note: note || "عملية شراء",
     });
     await newTransaction.save();
+
+    // ── إرسال Push Notification للعميل ──
+    await sendNotificationToUser(phone, {
+      title: "🎉 نسر البرية — نقاط جديدة!",
+      body: `تم إضافة ${pointsToAdd} نقطة لحسابك! رصيدك الحالي: ${user.points} نقطة 🦅`,
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/badge-72x72.png",
+      url: `/customer/${phone}`,
+    });
 
     res.json({
       message: `تم إضافة ${pointsToAdd} نقطة بنجاح لـ ${user.name}`,
