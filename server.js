@@ -11,6 +11,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const productRoutes = require('./routes/productRoutes'); // المنتجات
 const offerRoutes = require('./routes/offerRoutes');     // العروض
 const { router: pushRoutes } = require('./routes/pushRoutes'); // الإشعارات
+const orderRoutes = require('./routes/orderRoutes');           // الطلبات
 
 // 2. الـ Middleware
 app.use(express.json()); 
@@ -19,9 +20,10 @@ app.use(cors());
 // 3. استخدام الـ Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/products', productRoutes); // المنتجات
-app.use('/api/offers', offerRoutes);     // العروض
-app.use('/api/push', pushRoutes);        // الإشعارات
+app.use('/api/products', productRoutes);
+app.use('/api/offers', offerRoutes);
+app.use('/api/push', pushRoutes);
+app.use('/api/orders', orderRoutes); // الطلبات
 
 // 4. توصيل قاعدة البيانات (MongoDB)
 mongoose.connect(process.env.MONGO_URI)

@@ -4,19 +4,16 @@ const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 const { sendNotificationToUser } = require("./pushRoutes");
 
-// 1. إضافة نقاط لعميل (العملية الأساسية) مع إضافة "ملاحظة"
+// 1. إضافة نقاط لعميل
 router.post("/add-points", async (req, res) => {
   try {
     const { phone, amount, note } = req.body;
 
     const user = await User.findOne({ phone });
     if (!user)
-      return res
-        .status(404)
-        .json({ message: "الزبون ده مش متسجل عندنا يا ريس" });
+      return res.status(404).json({ message: "الزبون ده مش متسجل عندنا يا ريس" });
 
     const pointsToAdd = Math.floor(amount / 10);
-
     user.points += pointsToAdd;
     await user.save();
 
@@ -28,7 +25,6 @@ router.post("/add-points", async (req, res) => {
     });
     await newTransaction.save();
 
-    // ── إرسال Push Notification للعميل ──
     await sendNotificationToUser(phone, {
       title: "🎉 نسر البرية — نقاط جديدة!",
       body: `تم إضافة ${pointsToAdd} نقطة لحسابك! رصيدك الحالي: ${user.points} نقطة 🦅`,
@@ -43,6 +39,55 @@ router.post("/add-points", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "حصل خطأ وأنا بضيف النقاط" });
+  }
+});
+
+// 2. استبدال نقاط — الأدمن يخصم نقاط من عميل
+router.post("/redeem-points", async (req, res) => {
+  try {
+    const { phone, pointsToRedeem, redeemNote } = req.body;
+
+    if (!phone || !pointsToRedeem || pointsToRedeem <= 0) {
+      return res.status(400).json({ message: "بيانات ناقصة أو غير صحيحة" });
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) return res.status(404).json({ message: "الزبون مش موجود" });
+
+    if (user.points < pointsToRedeem) {
+      return res.status(400).json({
+        message: `النقاط مش كفاية! عنده ${user.points} نقطة بس`,
+      });
+    }
+
+    user.points -= pointsToRedeem;
+    await user.save();
+
+    // نسجل العملية كـ transaction بقيمة سالبة
+    const newTransaction = new Transaction({
+      customerId: user._id,
+      amount: -pointsToRedeem,           // سالب عشان استبدال
+      pointsAdded: -pointsToRedeem,
+      note: redeemNote || `استبدال ${pointsToRedeem} نقطة`,
+    });
+    await newTransaction.save();
+
+    // notification للعميل
+    await sendNotificationToUser(phone, {
+      title: "🛍️ نسر البرية — تم الاستبدال!",
+      body: `تم خصم ${pointsToRedeem} نقطة من رصيدك. رصيدك الحالي: ${user.points} نقطة`,
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/badge-72x72.png",
+      url: `/customer/${phone}`,
+    });
+
+    res.json({
+      message: `تم استبدال ${pointsToRedeem} نقطة بنجاح من ${user.name}`,
+      currentPoints: user.points,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "فشل في استبدال النقاط" });
   }
 });
 
@@ -112,36 +157,78 @@ router.get("/customer/:phone", async (req, res) => {
 // 4. تقرير المبيعات اليومي التفصيلي
 router.get("/sales-report", async (req, res) => {
   try {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // لو الأدمن بعت date نستخدمها، لو لأ نجيب النهارده
+    const targetDate = req.query.date ? new Date(req.query.date) : new Date();
 
-    // جلب كل عمليات اليوم مع اسم الزبون ورقم موبايله
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // جلب عمليات اليوم المطلوب (بدون الاستبدال اللي قيمته سالبة)
     const transactions = await Transaction.find({
-      date: { $gte: startOfToday },
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      amount: { $gt: 0 }, // بس العمليات الحقيقية مش الاستبدال
     })
-      .populate("customerId", "name phone") // دي بتجيب بيانات الزبون بدل الـ ID بس
+      .populate("customerId", "name phone")
       .sort({ createdAt: -1 });
 
-    const totalSales = transactions.reduce((sum, t) => sum + t.amount, 0);
+    // جلب عمليات الاستبدال بشكل منفصل
+    const redeemTransactions = await Transaction.find({
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      amount: { $lt: 0 },
+    })
+      .populate("customerId", "name phone")
+      .sort({ createdAt: -1 });
+
+    const totalSales  = transactions.reduce((sum, t) => sum + t.amount, 0);
     const totalPoints = transactions.reduce((sum, t) => sum + t.pointsAdded, 0);
+    const totalRedeem = redeemTransactions.reduce((sum, t) => sum + Math.abs(t.pointsAdded), 0);
+
+    // بيانات الأمس للمقارنة
+    const yesterday = new Date(targetDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const startOfYesterday = new Date(yesterday);
+    startOfYesterday.setHours(0, 0, 0, 0);
+    const endOfYesterday = new Date(yesterday);
+    endOfYesterday.setHours(23, 59, 59, 999);
+
+    const yesterdayTx = await Transaction.find({
+      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday },
+      amount: { $gt: 0 },
+    });
+    const yesterdaySales = yesterdayTx.reduce((sum, t) => sum + t.amount, 0);
 
     res.json({
+      date: targetDate.toISOString(),
       summary: {
         totalSales,
         totalPoints,
         ordersCount: transactions.length,
+        totalRedeem,
+        yesterdaySales,
       },
       transactions: transactions.map((t) => ({
         id: t._id,
-        customerName: t.customerId ? t.customerId.name : "زبون غير معروف",
+        customerName:  t.customerId ? t.customerId.name  : "زبون غير معروف",
         customerPhone: t.customerId ? t.customerId.phone : "-",
-        amount: t.amount,
-        points: t.pointsAdded,
-        note: t.note,
-        time: t.createdAt,
+        amount:  t.amount,
+        points:  t.pointsAdded,
+        note:    t.note,
+        time:    t.createdAt,
+      })),
+      redeemTransactions: redeemTransactions.map((t) => ({
+        id: t._id,
+        customerName:  t.customerId ? t.customerId.name  : "زبون غير معروف",
+        customerPhone: t.customerId ? t.customerId.phone : "-",
+        points: Math.abs(t.pointsAdded),
+        note:   t.note,
+        time:   t.createdAt,
       })),
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "فشل في تحميل تقرير المبيعات" });
   }
 });
